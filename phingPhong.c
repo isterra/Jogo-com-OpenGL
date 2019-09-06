@@ -30,6 +30,8 @@ typedef struct{
 
 Sprite barrasLaterais[N_RETANGULOS];
 Sprite bolinha;
+Sprite pontuacao;
+Sprite ESC;
 Jogador player[2];
 
 
@@ -227,37 +229,30 @@ void redimensiona(int width, int height) {
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
 }
-void movimento_das_barras(unsigned char key, int x, int y){
+void movimento_das_barras(){
   if(pausar==false){
-    switch (key) {
-        case 'w':
+
           if(keyW == true){
             if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=97)
             barrasLaterais[0].posicaoY += 5;
           }
-        break;
-        case 's':
+
         if(keyS == true){
             if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-97)
             barrasLaterais[0].posicaoY -= 5;
         }
-            break;
-        case'o':
+
         if(keyO == true){
             if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=97)
             barrasLaterais[1].posicaoY += 5;
         }
-            break;
-        case 'l':
+
         if(keyL==true){
             if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-97)
             barrasLaterais[1].posicaoY -= 5;
         }
-            break;
-        dafault:
-            break;
 
-    }
+
   }
 }
 void keyup(unsigned char key, int x, int y){
@@ -306,12 +301,12 @@ void teclado(unsigned char key, int x, int y) {
       default:
           break;
     }
-    movimento_das_barras(key,x,y);
 }
 void atualizaCena(int periodo) {
   if(pausar==false){
     movimenta_bolinha(&bolinha);
   }
+  movimento_das_barras();
     glutPostRedisplay();
     glutTimerFunc(periodo, atualizaCena, periodo);
 }
