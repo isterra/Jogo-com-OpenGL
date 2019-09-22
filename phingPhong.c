@@ -7,7 +7,6 @@
 #include <stdbool.h>
 #include <string.h>
 #include <time.h>
-
 #define N_RETANGULOS 2
 #define N_JOGADORES 2
 
@@ -18,12 +17,12 @@ GLuint texturaBarras;
 GLuint texturaConfirmacao;
 GLuint texturaMenu;
 GLuint texturaInstrucoes;
-GLuint texturaSobre;
 GLuint texturaBotaoSair;
 GLuint texturaPlayer1;
 GLuint texturaPlayer2;
 GLuint texturaBotaoPausar;
 GLuint texturaRestart;
+GLuint texturaGameOver;
 
 float controleAumentoVelocidade = 0;
 
@@ -53,6 +52,11 @@ int yPontuacaoPlayer1 = 110;
 int xPontuacaoPlayer2 = 45;
 int yPontuacaoPlayer2 = 110;
 
+int xSetPlayer1 = -20 ;
+int ySetPlayer1 = 110;
+int xSetPlayer2 = 78;
+int ySetPlayer2 = 110;
+
 bool mostraDebug = false;
 bool vaiAdois = false;
 bool pausar = true;
@@ -67,7 +71,6 @@ bool invertePlayer = false;
 bool comecar = false;
 bool reinicia = false;
 
-int controleTeclas = 1;
 
 typedef struct {
   int pontuacao ;
@@ -79,7 +82,6 @@ typedef struct {
     float posicaoY;
     float largura;
     float altura;
-    Jogador jogadores;
 } Sprite;
 
 typedef struct {
@@ -89,10 +91,11 @@ typedef struct {
   int botao;
 } Mouse;
 
-enum telasDeJogo {MENU, JOGO, INSTRUCOES};
+enum telasDeJogo {MENU, JOGO, INSTRUCOES, GAMEOVER};
 enum jogadores {NINGUEM, PLAYER1, PLAYER2};
 enum confirmacaoUsuario {NAO, SIM};
 enum telas{TELAINICIAL, TELAJOGO};
+enum eixo{eixoX,eixoY};
 
 int controleTelas = MENU;
 
@@ -104,6 +107,7 @@ Sprite esc;
 Sprite reset;
 Mouse mouse;
 Jogador player[N_JOGADORES];
+Sprite linhasDeColisao[3];
 
 GLuint carregaTextura(const char* arquivo) {
     GLuint idTextura = SOIL_load_OGL_texture(
@@ -119,15 +123,6 @@ GLuint carregaTextura(const char* arquivo) {
 
     return idTextura;
 }
-int velocidadeAleatoriaBolinhaY(){
-  int velocidade=0;
-  srand(time(0));
-  velocidade= rand()%100;
-  if(velocidade %2 == 0)
-    return velocidade;
-  return -velocidade;
-}
-
 void inicializa_variaveis() {
     glClearColor(1, 1, 1, 1); //Branco
 
@@ -136,20 +131,41 @@ void inicializa_variaveis() {
     player[1].pontuacao = 0;
     player[0].set = 0;
     player[1].set = 0;
+    //linhasDeColisao
+    linhasDeColisao[0].posicaoX = -90;
+    linhasDeColisao[0].posicaoY = 25.5;
+    linhasDeColisao[0].largura = 10;
+    linhasDeColisao[0].altura = 1;
+
+    linhasDeColisao[1].posicaoX = 90;
+    linhasDeColisao[1].posicaoY = 25.5;
+    linhasDeColisao[1].largura = 10;
+    linhasDeColisao[1].altura = 1;
+
+    linhasDeColisao[2].posicaoX = -90;
+    linhasDeColisao[2].posicaoY = -25.5;
+    linhasDeColisao[2].largura = 10;
+    linhasDeColisao[2].altura = 1;
+
+    linhasDeColisao[3].posicaoX = +90;
+    linhasDeColisao[3].posicaoY = -25.5;
+    linhasDeColisao[3].largura = 10;
+    linhasDeColisao[3].altura = 10;
+
+
+
 
     //Retângulo esquerdo
     barrasLaterais[0].posicaoX = -90;
     barrasLaterais[0].posicaoY = 0;
     barrasLaterais[0].largura = 10;
     barrasLaterais[0].altura = 50;
-    barrasLaterais[0].jogadores = player[0];
 
     //Retângulo direito
     barrasLaterais[1].posicaoX = 90;
     barrasLaterais[1].posicaoY = 0;
     barrasLaterais[1].largura = 10;
     barrasLaterais[1].altura = 50;
-    barrasLaterais[1].jogadores = player[1];
 
     //Bolinha
     bolinha.posicaoX = 0;
@@ -174,12 +190,12 @@ void inicializa_variaveis() {
     texturaConfirmacao = carregaTextura("sair.png");
     texturaMenu = carregaTextura("mainmenu.png");
     texturaInstrucoes = carregaTextura("menu.png");
-    texturaSobre = carregaTextura("sobre.png");
     texturaBotaoSair = carregaTextura("botaoSair.png");
     texturaPlayer1 = carregaTextura("players.png");
     texturaPlayer2 = carregaTextura("players.png");
     texturaBotaoPausar = carregaTextura("pause.png");
     texturaRestart = carregaTextura("restart.png");
+    texturaGameOver = carregaTextura("gameover.png");
 }
 
 void escreveTexto(void * font, char *s, float x, float y, float z) {
@@ -207,6 +223,22 @@ void desenhaPontuacaoPlayer2() {
     escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xPontuacaoPlayer2, yPontuacaoPlayer2, 0);
 }
 
+void desenhaSetPlayer1() {
+    glColor3f(1.0, 0.3, 0.6);
+    char textoPadrao[11] = "Set: ";
+    char textoSaida[15];
+    snprintf(textoSaida, 15, "%s %d", textoPadrao, player[0].set);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xSetPlayer1, ySetPlayer1, 0);
+}
+
+void desenhaSetPlayer2() {
+    glColor3f(0.2, 0.4, 0.8);
+    char textoPadrao[11] = "Set: ";
+    char textoSaida[15];
+    snprintf(textoSaida, 15, "%s %d", textoPadrao, player[1].set);
+    escreveTexto(GLUT_BITMAP_HELVETICA_18, textoSaida , xSetPlayer2, ySetPlayer2, 0);
+}
+
 void trocaCoordenadasPontuacao() {
   int aux;
 
@@ -220,35 +252,17 @@ void trocaCoordenadasPontuacao() {
   yPontuacaoPlayer2 = aux;
 }
 
-void reinicia_round() {
-  barrasLaterais[0].posicaoX = -90;
-  barrasLaterais[0].posicaoY = 0;
+void trocaCoordenadasSet() {
+  int aux;
 
-  //Retângulo direito
-  barrasLaterais[1].posicaoX = 90;
-  barrasLaterais[1].posicaoY = 0;
+  //Troca as coordenadas de desenho no texto
+  aux = xSetPlayer1;
+  xSetPlayer1 = xSetPlayer2;
+  xSetPlayer2 = aux;
 
-  //Bolinha
-  bolinha.posicaoX = 0;
-  bolinha.posicaoY = 0;
-  velocidade_bolinhaX = 3.0;
-  velocidade_bolinhaY = -3.0;
-  comecar = false;
-}
-
-void zeraPontos(){
-  player[0].pontuacao = 0;
-  player[1].pontuacao = 0;
-}
-
-int venceu_jogo() {
-  if(player[0].set == 2)
-    exit(0);
-
-  if(player[1].set == 2)
-    return PLAYER1;
-
-  return NINGUEM;
+  aux = ySetPlayer1;
+  ySetPlayer1 = ySetPlayer2;
+  ySetPlayer2 = aux;
 }
 
 void trocaCoordenadasPlayers() {
@@ -288,6 +302,42 @@ void trocaCoordenadasPlayers() {
   v3yPlayer2 = aux;
 }
 
+void reinicia_round() {
+  barrasLaterais[0].posicaoX = -90;
+  barrasLaterais[0].posicaoY = 0;
+
+  //Retângulo direito
+  barrasLaterais[1].posicaoX = 90;
+  barrasLaterais[1].posicaoY = 0;
+
+  linhasDeColisao[0].posicaoX = -90;
+  linhasDeColisao[0].posicaoY = 25.5;
+  linhasDeColisao[1].posicaoX = 90;
+  linhasDeColisao[1].posicaoY = 25.5;
+  linhasDeColisao[2].posicaoX = -90;
+  linhasDeColisao[2].posicaoY = -25.5;
+
+  //Bolinha
+  bolinha.posicaoX = 0;
+  bolinha.posicaoY = 0;
+  velocidade_bolinhaX = 3.0;
+  velocidade_bolinhaY = -3.0;
+  comecar = false;
+}
+
+void zeraPontos(){
+  player[0].pontuacao = 0;
+  player[1].pontuacao = 0;
+}
+
+void venceu_jogo() {
+  if(player[0].set == 2)
+    controleTelas = GAMEOVER;
+
+  if(player[1].set == 2)
+    controleTelas = GAMEOVER;
+}
+
 void setNormal() {
   if(vaiAdois == false) {
 
@@ -298,14 +348,17 @@ void setNormal() {
       invertePlayer = !invertePlayer;
       trocaCoordenadasPlayers();
       trocaCoordenadasPontuacao();
+      trocaCoordenadasSet();
     }
-    if(player[1].pontuacao == 11) {
+
+    else if(player[1].pontuacao == 11) {
       player[1].set++;
       zeraPontos();
       reinicia_round();
       invertePlayer = !invertePlayer;
       trocaCoordenadasPlayers();
       trocaCoordenadasPontuacao();
+      trocaCoordenadasSet();
     }
   }
 }
@@ -316,8 +369,6 @@ void adicionaPonto(){
     player[0].pontuacao += 1;
     controleAumentoVelocidade = 0;
     setNormal();
-    printf("player 0 %i\n",player[0].pontuacao);
-    printf("player 0 %i\n",player[0].set);
     reinicia_round();
   }
 
@@ -325,37 +376,34 @@ void adicionaPonto(){
     player[1].pontuacao += 1;
     controleAumentoVelocidade = 0;
     setNormal();
-    printf("player 0 %i\n",player[0].pontuacao);
-    printf("player 0 %i\n",player[0].set);
     reinicia_round();
   }
 
   if(bolinha.posicaoX - bolinha.largura < -100 && !invertePlayer) {
-    player[1].pontuacao+=1;
+    player[1].pontuacao += 1;
     setNormal();
-    printf("player 1 %i\n",player[1].pontuacao);
-    printf("player 1 %i\n",player[1].set);
     reinicia_round();
   }
 
   else if(bolinha.posicaoX - bolinha.largura < -100 && invertePlayer) {
     player[0].pontuacao+=1;
     setNormal();
-    printf("player 1 %i\n",player[1].pontuacao);
-    printf("player 1 %i\n",player[1].set);
     reinicia_round();
   }
 }
-void verificaSet(){
-  if(((player[0].set == player[1].set )&&player[0].set!=0) && (player[0].pontuacao == 5 || player[1].pontuacao == 5)){
-    invertePlayer = !invertePlayer;
+
+void verificaSet() {
+  if(player[0].set == player[1].set && player[0].set != 0) {
+    if(player[0].pontuacao == 4 || player[1].pontuacao == 4) 
+      invertePlayer = true;
+      if((player[0].pontuacao >= 4 && player[1].pontuacao == 4) || (player[1].pontuacao >= 4 && player[0].pontuacao == 4))
+        invertePlayer = false;
   }
 }
 
 void vai_A_dois() {
-
   int diferenca = 2;
-  if(abs(player[0].pontuacao - player[1].pontuacao) == diferenca){
+  if(abs(player[0].pontuacao - player[1].pontuacao) == diferenca) {
     if(player[0].pontuacao > player[1].pontuacao) {
       player[0].set++;
       zeraPontos();
@@ -375,7 +423,6 @@ void vai_A_dois() {
 }
 
 void pontuacao_jogo() {
-
   verificaSet();
 
   if(player[0].pontuacao == 10 && player[1].pontuacao == 10)
@@ -390,7 +437,7 @@ void pontuacao_jogo() {
 }
 //******************************************************************************
 //***************************** MOVIMENTOS DA BOLINHA **************************
-void limite_bolinha_pontuacao (Sprite* posicoessBolinha) {
+  void limite_bolinha_pontuacao (Sprite* posicoessBolinha) {
     if(posicoessBolinha->posicaoY + posicoessBolinha->largura > 100)
         velocidade_bolinhaY = -velocidade_bolinhaY;
     if(posicoessBolinha->posicaoX + posicoessBolinha->largura > 100){
@@ -436,9 +483,9 @@ void aumenta_velocidade_bolinha() {
       velocidade_bolinhaX = 5.0;
       velocidade_bolinhaY = 5.0;
     }
-    else {
-      velocidade_bolinhaX = 1.2 * velocidade_bolinhaX;
-      velocidade_bolinhaY = 1.2 * velocidade_bolinhaY;
+    else{
+      velocidade_bolinhaX = 1.17 * velocidade_bolinhaX;
+      velocidade_bolinhaY = 1.17 * velocidade_bolinhaY;
     }
   }
     bolinha.posicaoX += velocidade_bolinhaX;
@@ -447,10 +494,10 @@ void aumenta_velocidade_bolinha() {
 
 int movimenta_bolinha(Sprite* posicoesBolinha) {
     if(colisao_bolinha(posicoesBolinha,&barrasLaterais[0]) == true){
-        velocidade_bolinhaX = -velocidade_bolinhaX;
+          velocidade_bolinhaX = -velocidade_bolinhaX ;
     }
     if(colisao_bolinha(posicoesBolinha,&barrasLaterais[1]) == true){
-       velocidade_bolinhaX = -velocidade_bolinhaX ;
+        velocidade_bolinhaX = -velocidade_bolinhaX ;
     }
 
     limite_bolinha_pontuacao(posicoesBolinha);
@@ -471,21 +518,21 @@ int cpy(int y) {
 //******************************************************************************
 //************************ DETECÇAO MOVIMENTO MOUSE ****************************
 void movimento_mouse(int button, int state, int x, int y) {
-  mouse.posicaoX = x;
-  mouse.posicaoY = y;
-  mouse.clique = state;
-  mouse.botao = button;
-
   switch (controleTelas) {
     case MENU:
       if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
           if(x >= cpx(440) && x <= cpx(560) && y >= cpy(290)  && y <= cpy(340)) {
             controleTelas = JOGO;
             pausar = false;
-            controleTeclas = false;
           }
           else if(x >= cpx(415) && x <= cpx(600) && y >= cpy(380)  && y <= cpy(430)) controleTelas = INSTRUCOES;
           else if(x >= cpx(820) && x <= cpx(980) && y >= cpy(410)  && y <= cpy(450)) exit(0);
+      }
+    break;
+
+    case INSTRUCOES:
+      if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+          if(x >= cpx(820) && x <= cpx(980) && y >= cpy(410)  && y <= cpy(450)) controleTelas = MENU;
       }
     break;
 
@@ -502,8 +549,12 @@ void movimento_mouse(int button, int state, int x, int y) {
 
       else if(reinicia) {
         if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-          if(x >= cpx(526) && x <= cpx(626) && y >= cpy(313)  && y <= cpy(338)) reiniciar();
-          else if(x >= cpx(377) && x <= cpx(526) && y >= cpy(313)  && y <= cpy(338)) {
+          if(x >= cpx(402) && x <= cpx(523) && y >= cpy(303)  && y <= cpy(329)) {
+              reinicia = false;
+              reiniciar();
+
+          }
+          else if(x >= cpx(524) && x <= cpx(602) && y >= cpy(303)  && y <= cpy(329)) {
             pausar = false;
             reinicia = false;
           }
@@ -511,18 +562,21 @@ void movimento_mouse(int button, int state, int x, int y) {
       }
     break;
 
-    case INSTRUCOES:
+    case GAMEOVER:
       if(button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-          if(x >= cpx(820) && x <= cpx(980) && y >= cpy(410)  && y <= cpy(450)) controleTelas = MENU;
+        if(x >= cpx(197) && x <= cpx(537) && y >= cpy(369)  && y <= cpy(398)) {
+          inicializa_variaveis();
+          controleTelas = MENU;
+        }
+
+        else if(x >= cpx(621) && x <= cpx(788) && y >= cpy(369)  && y <= cpy(398))
+          exit(0);
       }
     break;
-
 
   default:
     break;
   }
-
-
 }
 //******************************************************************************
 //*************************** FUNCOES DE CONTROLE ******************************
@@ -564,14 +618,28 @@ void cria_bolinha(Sprite* bolinha) {
         glTranslatef(bolinha->posicaoX,bolinha->posicaoY,0);
         glBegin(GL_TRIANGLE_FAN);
 
-            glTexCoord2f(0, 0); glVertex2f(-bolinha->largura/2,-bolinha->altura/2);
-            glTexCoord2f(0.2, 0); glVertex2f( bolinha->largura/2,-bolinha->altura/2);
-            glTexCoord2f(0.2, 0.23); glVertex2f( bolinha->largura/2, bolinha->altura/2);
-            glTexCoord2f(0.23, 0); glVertex2f(-bolinha->largura/2, bolinha->altura/2);
+            glTexCoord2f(0, 0.75); glVertex2f(-bolinha->largura/2,-bolinha->altura/2);
+            glTexCoord2f(0.2,0.75); glVertex2f( bolinha->largura/2,-bolinha->altura/2);
+            glTexCoord2f(0.2, 1); glVertex2f( bolinha->largura/2, bolinha->altura/2);
+            glTexCoord2f(0 , 1); glVertex2f(-bolinha->largura/2, bolinha->altura/2);
 
         glEnd();
     glDisable(GL_TEXTURE_2D);
     glPopMatrix();
+}
+
+void criaGameOver(){
+  glEnable(GL_TEXTURE_2D);
+  glBindTexture(GL_TEXTURE_2D, texturaGameOver);
+  glColor3f(1,1,1);
+
+  glBegin(GL_TRIANGLE_FAN);
+      glTexCoord2f(0, 0); glVertex2f(-100, -100);
+      glTexCoord2f(1, 0); glVertex2f(100, -100);
+      glTexCoord2f(1, 1); glVertex2f(100, 150);
+      glTexCoord2f(0, 1); glVertex2f(-100, 150);
+  glEnd();
+  glDisable(GL_TEXTURE_2D);
 }
 
 void criaFundo() {
@@ -631,22 +699,6 @@ void desenhaTextoInstrucoes() {
     glColor3f(1, 0, 0);
       escreveTexto(GLUT_BITMAP_HELVETICA_18, quartaLinha , -80, -50, 0);
       escreveTexto(GLUT_BITMAP_HELVETICA_18, quintaLinha , -80, -70, 0);
-}
-
-
-void desenhaSobre() {
-
-  glEnable(GL_TEXTURE_2D);
-  glBindTexture(GL_TEXTURE_2D, texturaSobre);
-  glColor3f(1, 1, 1);
-
-  glBegin(GL_TRIANGLE_FAN);
-    glTexCoord2f(0, 0); glVertex2f(-100, -100);
-        glTexCoord2f(1, 0); glVertex2f(100, -100);
-        glTexCoord2f(1, 1); glVertex2f(100, 100);
-        glTexCoord2f(0, 1); glVertex2f(-100, 100);
-    glEnd();
-  glDisable(GL_TEXTURE_2D);
 }
 
 void desenhaBotaoSair() {
@@ -711,10 +763,10 @@ void desenhaConfirmacaoRestart() {
   glColor3f(1, 1, 1);
 
   glBegin(GL_TRIANGLE_FAN);
-        glTexCoord2f(0.4, 0.43); glVertex2f(-20, -20);
-        glTexCoord2f(0.6, 0.43); glVertex2f(20, -20);
-        glTexCoord2f(0.6, 0.55); glVertex2f(20, 20);
-        glTexCoord2f(0.4, 0.55); glVertex2f(-20, 20);
+        glTexCoord2f(0.09, 0.35); glVertex2f(-23, -23);
+        glTexCoord2f(0.90, 0.35); glVertex2f(23, -23);
+        glTexCoord2f(0.9,0.92); glVertex2f(23, 23);
+        glTexCoord2f(0.09,0.92); glVertex2f(-23, 23);
     glEnd();
   glDisable(GL_TEXTURE_2D);
 }
@@ -738,6 +790,7 @@ void cria_barrasLaterais(Sprite *barras) {
     glDisable(GL_TEXTURE_2D);
     glPopMatrix();
 }
+
 void redimensiona(int width, int height) {
 
     glViewport(0, 0, width, height);
@@ -751,68 +804,64 @@ void redimensiona(int width, int height) {
 //******************************************************************************
 //***************************** DETECÇAO DAS TECLAS ****************************
 void movimento_das_barras() {
+  if(controleTelas == JOGO){
+    if(pausar == false){
+      if(invertePlayer == false){
+            if(keyW == true){
+              if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=100)
+              barrasLaterais[0].posicaoY += 7;
+              comecar = true;
+            }
 
-  if(pausar == false){
-    if(invertePlayer == false){
+          if(keyS == true){
+              if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-100)
+              barrasLaterais[0].posicaoY -= 7;
+              comecar = true;
+          }
+
+          if(keyO == true){
+              if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=100)
+              barrasLaterais[1].posicaoY += 7;
+              comecar = true;
+          }
+
+          if(keyL==true){
+              if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-100)
+              barrasLaterais[1].posicaoY -= 7;
+              comecar = true;
+          }
+      }
+      else{
           if(keyW == true){
-            if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=100)
-            barrasLaterais[0].posicaoY += 7;
+            if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=100)
+            barrasLaterais[1].posicaoY += 5;
             comecar = true;
           }
 
         if(keyS == true){
-            if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-100)
-            barrasLaterais[0].posicaoY -= 7;
+            if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-100)
+            barrasLaterais[1].posicaoY -= 5;
             comecar = true;
         }
 
         if(keyO == true){
-            if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=100)
-            barrasLaterais[1].posicaoY += 7;
+            if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=100)
+            barrasLaterais[0].posicaoY += 5;
             comecar = true;
         }
 
         if(keyL==true){
-            if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-100)
-            barrasLaterais[1].posicaoY -= 7;
+            if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-100)
+            barrasLaterais[0].posicaoY -= 5;
             comecar = true;
         }
-    }
-    else{
-        if(keyW == true){
-          if(barrasLaterais[1].posicaoY+barrasLaterais[1].altura/2<=100)
-          barrasLaterais[1].posicaoY += 5;
-          comecar = true;
-        }
-
-      if(keyS == true){
-          if(barrasLaterais[1].posicaoY-barrasLaterais[1].altura/2>=-100)
-          barrasLaterais[1].posicaoY -= 5;
-          comecar = true;
-      }
-
-      if(keyO == true){
-          if(barrasLaterais[0].posicaoY+barrasLaterais[0].altura/2<=100)
-          barrasLaterais[0].posicaoY += 5;
-          comecar = true;
-      }
-
-      if(keyL==true){
-          if(barrasLaterais[0].posicaoY-barrasLaterais[0].altura/2>=-100)
-          barrasLaterais[0].posicaoY -= 5;
-          comecar = true;
       }
     }
   }
 }
 
 void teclado(unsigned char key, int x, int y) {
-  switch (controleTeclas) {
 
-    case 1:
-      break;
-
-    case 0:
       switch (key) {
 
         case 27:
@@ -851,9 +900,7 @@ void teclado(unsigned char key, int x, int y) {
             break;
     }
 
-    default:
-      break;
-    }
+
 }
 
 void keyup(unsigned char key, int x, int y) {
@@ -880,10 +927,11 @@ void keyup(unsigned char key, int x, int y) {
 }
 
 void atualizaCena(int periodo) {
-
-  if(pausar == false) {
-    if(comecar == true){
-      movimenta_bolinha(&bolinha);
+  if(controleTelas == JOGO){
+    if(pausar == false) {
+      if(comecar == true){
+        movimenta_bolinha(&bolinha);
+      }
     }
   }
     movimento_das_barras();
@@ -899,6 +947,12 @@ void desenhaCena() {
             desenhaBotaoSair();
           break;
 
+          case INSTRUCOES:
+            desenhaInstrucoes();
+            desenhaBotaoSair();
+            desenhaTextoInstrucoes();
+          break;
+
           case JOGO:
             criaFundo();
               for(int i = 0; i < N_RETANGULOS; i++) {
@@ -908,6 +962,8 @@ void desenhaCena() {
               desenhaNomePlayer2();
               desenhaPontuacaoPlayer1();
               desenhaPontuacaoPlayer2();
+              desenhaSetPlayer1();
+              desenhaSetPlayer2();
               cria_bolinha(&bolinha);
               if(aparecerESC)
                 cria_retanguloESC();
@@ -917,11 +973,10 @@ void desenhaCena() {
                 desenhaConfirmacaoRestart();
             break;
 
-          case INSTRUCOES:
-            desenhaInstrucoes();
-            desenhaBotaoSair();
-            desenhaTextoInstrucoes();
-          break;
+          case GAMEOVER:
+            criaFundo();
+            criaGameOver();
+            break;
 
           default:
             break;
@@ -931,7 +986,7 @@ void desenhaCena() {
 }
 void posicoesMouse(int x,int y){
 
-  printf("largura %i altura %i x %i y %i\n",glutGet(GLUT_WINDOW_WIDTH),glutGet(GLUT_WINDOW_HEIGHT),x,y);
+// printf("largura %i altura %i x %i y %i\n",glutGet(GLUT_WINDOW_WIDTH),glutGet(GLUT_WINDOW_HEIGHT),x,y);
 }
 
 
